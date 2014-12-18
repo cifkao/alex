@@ -2,9 +2,9 @@
 # http://about.travis-ci.org/docs/user/build-configuration/
 # Travis uses Ubuntu 64 12.04
 
-branches:
-    only:
-        - master
+# branches:
+#     only:
+#         - master
 
 language: python
 python:
