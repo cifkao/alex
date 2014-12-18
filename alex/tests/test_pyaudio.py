@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import pyaudio
-
 
 if __name__ == '__main__':
+    import pyaudio
     standard_sample_rates = [8000.0, 9600.0, 11025.0, 12000.0,
                              16000.0, 22050.0, 24000.0, 32000.0,
                              44100.0, 48000.0, 88200.0, 96000.0,

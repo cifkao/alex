@@ -1,8 +1,8 @@
-import pyaudio
-
-
+#!/usr/bin/env python
+# encoding: utf-8
 
 def play(cfg, wav):
+    import pyaudio
     # open the audio device
     p = pyaudio.PyAudio()
 
