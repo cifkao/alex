@@ -68,6 +68,19 @@ class SLUHyp(Message):
     def __unicode__(self):
         return "#%-6d Time: %s From: %-10s To: %-10s Hyp: %s " % (self.id, self.get_time_str(), self.source, self.target, self.hyp)
 
+class MTHyp(Message):
+    def __init__(self, hyp, asr_hyp=None, source=None, target=None):
+        Message.__init__(self, source, target)
+
+        self.hyp = hyp
+        self.asr_hyp = asr_hyp
+
+    def __str__(self):
+        return unicode(self).encode('ascii', 'replace')
+
+    def __unicode__(self):
+        return "#%-6d Time: %s From: %-10s To: %-10s Hyp: %s " % (self.id, self.get_time_str(), self.source, self.target, self.hyp)
+
 class DMDA(Message):
     def __init__(self, da, source=None, target=None):
         Message.__init__(self, source, target)
