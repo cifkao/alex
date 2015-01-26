@@ -57,7 +57,6 @@ class MT(multiprocessing.Process):
         Available commands:
           stop() - stop processing and exit the process
           flush() - flush input buffers.
-            Now it only flushes the input connection.
 
         Return True if the process should terminate.
         """

@@ -6,6 +6,7 @@ import urllib2
 import json
 
 from alex.components.mt.base import MTInterface
+from alex.components.mt.exceptions import MTException
 
 class MTMonkeyMT(MTInterface):
 
@@ -48,8 +49,8 @@ class MTMonkeyMT(MTInterface):
             try:
                 json_hypotheses = self.get_translation_hypotheses(best_asr_hyp)
             except (urllib2.HTTPError, urllib2.URLError) as e:
-                self.syslog.exception('MTMonkeyMT HTTP/URL error: %s' % unicode(e))
-                json_hypotheses = '{"errorCode": 9, "errorMessage": "Cannot reach MTMonkey"}'
+                self.syslog.exception('MTMonkeyMT connection error: %s' % unicode(e))
+                raise MTException('MTMonkey connection error: %s' % str(e))
 
             try:
                 monkey_hyp = json.loads(json_hypotheses)
@@ -61,9 +62,12 @@ class MTMonkeyMT(MTInterface):
                         sep = ' '
                         
                 else:
-                    nblist = ['_other_']
+                    if 'errorCode' in monkey_hyp and 'errorMessage' in monkey_hyp:
+                        raise MTException('MTMonkey error #%d: %s' % (monkey_hyp['errorCode'], monkey_hyp['errorMessage']))
+                    else:
+                        raise MTException('MTMonkey error')
             except:
-                nblist = ['_other_']
+                raise MTException('MTMonkey error')
         else:
             nblist = ['_other_']
 
