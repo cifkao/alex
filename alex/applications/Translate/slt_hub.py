@@ -96,10 +96,14 @@ if __name__ == '__main__':
       """)
 
     parser.add_argument('-c', action="store", dest="configs", nargs='+',
-                        help='additional configure file')
+                        help='additional configuration files')
+    parser.add_argument('-n', action="store", dest="max_n_calls", type=int, default=0,
+                        help='maximum number of calls')
     args = parser.parse_args()
 
     cfg = Config.load_configs(args.configs)
+
+    max_n_calls = args.max_n_calls
 
     #########################################################################
     #########################################################################
@@ -422,7 +426,7 @@ if __name__ == '__main__':
                 vio_commands.send(Command('hangup()', 'HUB', 'VoipIO'))
                 flush_all()
 
-        if not call_connected and n_calls >= 1:
+        if max_n_calls != 0 and not call_connected and n_calls >= max_n_calls:
             break
 
     # stop processes
