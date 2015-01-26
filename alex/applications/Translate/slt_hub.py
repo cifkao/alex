@@ -70,6 +70,7 @@ def flush_all():
     asr_commands.send(Command('flush()', 'HUB', 'ASR'))
     mt_commands.send(Command('flush()', 'HUB', 'MT'))
     tts_commands.send(Command('flush()', 'HUB', 'TTS'))
+    src_tts_commands.send(Command('flush()', 'HUB', 'TTS'))
 
 def play_intro(cfg, tts_commands, intro_id, last_intro_id):
     for i in range(len(cfg['TranslateHub']['introduction'])):
@@ -93,15 +94,20 @@ if __name__ == '__main__':
         In addition, it reads all config file passed as an argument of a '-c'.
         The additional config files overwrites any default or previous values.
 
+        A config file (or a list of config files) for the source language TTS must be
+        specified with '-t'.
       """)
 
     parser.add_argument('-c', action="store", dest="configs", nargs='+',
                         help='additional configuration files')
+    parser.add_argument('-t', action="store", dest="source_tts_configs", nargs='+',
+                        help='configuration file for source TTS')
     parser.add_argument('-n', action="store", dest="max_n_calls", type=int, default=0,
                         help='maximum number of calls')
     args = parser.parse_args()
 
     cfg = Config.load_configs(args.configs)
+    src_tts_cfg = Config.load_configs(args.configs + args.source_tts_configs)
 
     max_n_calls = args.max_n_calls
 
@@ -125,14 +131,18 @@ if __name__ == '__main__':
     tts_commands, tts_child_commands = multiprocessing.Pipe()   # used to send commands to TTS
     tts_text_in, tts_child_text_in = multiprocessing.Pipe()     # used to send TTS text
 
-    command_connections = [vio_commands, vad_commands, asr_commands, mt_commands, tts_commands]
+    src_tts_commands, src_tts_child_commands = multiprocessing.Pipe()   # used to send commands to TTS
+    src_tts_text_in, src_tts_child_text_in = multiprocessing.Pipe()     # used to send TTS text
+
+    command_connections = [vio_commands, vad_commands, asr_commands, mt_commands, tts_commands, src_tts_commands]
 
     non_command_connections = [vio_record, vio_child_record,
                                vio_play, vio_child_play,
                                vad_audio_out, vad_child_audio_out,
                                asr_hypotheses_out, asr_child_hypotheses,
                                mt_hypotheses_out, mt_child_hypotheses,
-                               tts_text_in, tts_child_text_in]
+                               tts_text_in, tts_child_text_in,
+                               src_tts_text_in, src_tts_child_text_in]
 
     close_event = multiprocessing.Event()
 
@@ -141,12 +151,14 @@ if __name__ == '__main__':
     asr = ASR(cfg, asr_child_commands, vad_audio_out, asr_child_hypotheses, close_event)
     mt = MT(cfg, mt_child_commands, asr_hypotheses_out, mt_child_hypotheses, close_event)
     tts = TTS(cfg, tts_child_commands, tts_child_text_in, vio_play, close_event)
+    src_tts = TTS(src_tts_cfg, src_tts_child_commands, src_tts_child_text_in, vio_play, close_event)
 
     vio.start()
     vad.start()
     asr.start()
     mt.start()
     tts.start()
+    src_tts.start()
 
     cfg['Logging']['session_logger'].set_close_event(close_event)
     cfg['Logging']['session_logger'].set_cfg(cfg)
@@ -216,7 +228,7 @@ if __name__ == '__main__':
                 best_hyp = hypotheses.hyp[0]
 
                 if '_other_' == best_hyp:
-                    tts_commands.send(Command('synthesize(text="%s")' % (cfg['TranslateHub']['i_dont_understand']), 'HUB', 'TTS'))
+                    src_tts_commands.send(Command('synthesize(text="%s")' % (cfg['TranslateHub']['i_dont_understand']), 'HUB', 'TTS'))
                 else:
                     s_voice_activity = True
                     tts_commands.send(Command('synthesize(text="%s")' % (best_hyp), 'HUB', 'TTS'))
@@ -300,7 +312,7 @@ if __name__ == '__main__':
                     if last24_num_calls > cfg['TranslateHub']['last24_max_num_calls'] or \
                             last24_total_time > cfg['TranslateHub']['last24_max_total_time']:
 
-                        tts_commands.send(Command('synthesize(text="%s")' % cfg['TranslateHub']['rejected'], 'HUB', 'TTS'))
+                        src_tts_commands.send(Command('synthesize(text="%s")' % cfg['TranslateHub']['rejected'], 'HUB', 'TTS'))
                         call_connected = True
                         reject_played = True
                         s_voice_activity = True
@@ -319,7 +331,7 @@ if __name__ == '__main__':
                         u_voice_activity = False
                         u_last_voice_activity_time = 0
 
-                        intro_id, last_intro_id = play_intro(cfg, tts_commands, intro_id, last_intro_id)
+                        intro_id, last_intro_id = play_intro(cfg, src_tts_commands, intro_id, last_intro_id)
 
                         m.append('CALL ACCEPTED')
 
@@ -398,6 +410,10 @@ if __name__ == '__main__':
             command = tts_commands.recv()
             cfg['Logging']['system_logger'].info(command)
 
+        if src_tts_commands.poll():
+            command = src_tts_commands.recv()
+            cfg['Logging']['system_logger'].info(command)
+
         current_time = time.time()
 
     #  print
@@ -413,12 +429,12 @@ if __name__ == '__main__':
             flush_all()
 
         if intro_played and current_time - call_start > cfg['TranslateHub']['max_call_length'] and s_voice_activity == False:
-            # hovor trval jiz vice nez deset minut
+            # the call has been too long
             if not end_played:
                 s_voice_activity = True
                 last_intro_id = str(intro_id)
                 intro_id += 1
-                tts_commands.send(Command('synthesize(text="%s")' % cfg['TranslateHub']['closing'], 'HUB', 'TTS'))
+                src_tts_commands.send(Command('synthesize(text="%s")' % cfg['TranslateHub']['closing'], 'HUB', 'TTS'))
                 end_played = True
             else:
                 intro_played = False
@@ -435,6 +451,7 @@ if __name__ == '__main__':
     asr_commands.send(Command('stop()', 'HUB', 'ASR'))
     mt_commands.send(Command('stop()', 'HUB', 'MT'))
     tts_commands.send(Command('stop()', 'HUB', 'TTS'))
+    src_tts_commands.send(Command('stop()', 'HUB', 'TTS'))
 
     # clean connections
     for c in command_connections:

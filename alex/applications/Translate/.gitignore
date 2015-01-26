@@ -4,3 +4,4 @@ tmp
 *.pckl
 nohup.out
 gasr_private.cfg
+vrss_private.cfg
