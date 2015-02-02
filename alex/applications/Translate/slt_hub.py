@@ -130,9 +130,11 @@ if __name__ == '__main__':
 
     tts_commands, tts_child_commands = multiprocessing.Pipe()   # used to send commands to TTS
     tts_text_in, tts_child_text_in = multiprocessing.Pipe()     # used to send TTS text
+    tts_audio_out, tts_child_audio_out = multiprocessing.Pipe() # used to receive synthesized audio
 
     src_tts_commands, src_tts_child_commands = multiprocessing.Pipe()   # used to send commands to TTS
     src_tts_text_in, src_tts_child_text_in = multiprocessing.Pipe()     # used to send TTS text
+    src_tts_audio_out, src_tts_child_audio_out = multiprocessing.Pipe() # used to receive synthesized audio
 
     command_connections = [vio_commands, vad_commands, asr_commands, mt_commands, tts_commands, src_tts_commands]
 
@@ -142,7 +144,10 @@ if __name__ == '__main__':
                                asr_hypotheses_out, asr_child_hypotheses,
                                mt_hypotheses_out, mt_child_hypotheses,
                                tts_text_in, tts_child_text_in,
-                               src_tts_text_in, src_tts_child_text_in]
+                               tts_audio_out, tts_child_audio_out,
+                               src_tts_text_in, src_tts_child_text_in,
+                               src_tts_audio_out, src_tts_child_audio_out
+                               ]
 
     close_event = multiprocessing.Event()
 
@@ -150,8 +155,8 @@ if __name__ == '__main__':
     vad = VAD(cfg, vad_child_commands, vio_record, vad_child_audio_out, close_event)
     asr = ASR(cfg, asr_child_commands, vad_audio_out, asr_child_hypotheses, close_event)
     mt = MT(cfg, mt_child_commands, asr_hypotheses_out, mt_child_hypotheses, close_event)
-    tts = TTS(cfg, tts_child_commands, tts_child_text_in, vio_play, close_event)
-    src_tts = TTS(src_tts_cfg, src_tts_child_commands, src_tts_child_text_in, vio_play, close_event)
+    tts = TTS(cfg, tts_child_commands, tts_child_text_in, tts_child_audio_out, close_event)
+    src_tts = TTS(src_tts_cfg, src_tts_child_commands, src_tts_child_text_in, src_tts_child_audio_out, close_event)
 
     vio.start()
     vad.start()
@@ -233,12 +238,17 @@ if __name__ == '__main__':
                     s_voice_activity = True
                     tts_commands.send(Command('synthesize(text="%s")' % (best_hyp), 'HUB', 'TTS'))
 
+        if tts_audio_out.poll():
+            vio_play.send(tts_audio_out.recv())
+
+        if src_tts_audio_out.poll():
+            vio_play.send(src_tts_audio_out.recv())
+
         if call_back_time != -1 and call_back_time < time.time():
             vio_commands.send(Command('make_call(destination="%s")' % call_back_uri, 'HUB', 'VoipIO'))
             call_back_time = -1
             call_back_uri = None
 
-        # read all messages
         if vio_commands.poll():
             command = vio_commands.recv()
 
