@@ -225,8 +225,8 @@ if __name__ == '__main__':
             hypotheses = mt_hypotheses_out.recv()
             if intro_played and \
                 s_voice_activity == False and \
-                u_voice_activity == False and \
-                current_time - s_last_voice_activity_time > 5 and current_time - u_last_voice_activity_time > 0.6:
+                u_voice_activity == False:
+                #current_time - s_last_voice_activity_time > 5 and current_time - u_last_voice_activity_time > 0.6:
 
                 cfg['Logging']['system_logger'].info(hypotheses)
 
@@ -235,7 +235,6 @@ if __name__ == '__main__':
                 if '_other_' == best_hyp:
                     src_tts_commands.send(Command('synthesize(text="%s")' % (cfg['TranslateHub']['i_dont_understand']), 'HUB', 'TTS'))
                 else:
-                    s_voice_activity = True
                     tts_commands.send(Command('synthesize(text="%s")' % (best_hyp), 'HUB', 'TTS'))
 
         if tts_audio_out.poll():
