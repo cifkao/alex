@@ -43,7 +43,9 @@ class MTMonkeyMT(MTInterface):
         Translate the given ASR hypothesis.
         """
 
-        best_asr_hyp = str(asr_hyp.get_best()).lower()
+        best_asr_hyp = unicode(asr_hyp.get_best()).lower()
+        if best_asr_hyp == '':
+            return ['']
 
         if '_other_' != best_asr_hyp:
             try:

@@ -19,7 +19,7 @@ from alex.components.hub.vad import VAD
 from alex.components.hub.asr import ASR
 from alex.components.hub.mt  import MT
 from alex.components.hub.tts import TTS
-from alex.components.hub.messages import Command
+from alex.components.hub.messages import Command, TTSText
 from alex.utils.config import Config
 
 
@@ -237,7 +237,7 @@ if __name__ == '__main__':
                 if '_other_' == best_hyp:
                     src_tts_commands.send(Command('synthesize(text="%s",log="true")' % (cfg['TranslateHub']['i_dont_understand']), 'HUB', 'TTS'))
                 else:
-                    tts_commands.send(Command('synthesize(text="%s",log="true")' % (best_hyp), 'HUB', 'TTS'))
+                    tts_text_in.send(TTSText(best_hyp, 'HUB', 'TTS'))
 
         while tts_audio_out.poll():
             msg = tts_audio_out.recv()
