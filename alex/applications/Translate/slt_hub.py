@@ -73,10 +73,11 @@ def flush_all():
     src_tts_commands.send(Command('flush()', 'HUB', 'TTS'))
 
 def play_intro(cfg, tts_commands, intro_id, last_intro_id):
+    cfg['Logging']['session_logger'].turn("system")
     for i in range(len(cfg['TranslateHub']['introduction'])):
         last_intro_id = str(intro_id)
         intro_id += 1
-        tts_commands.send(Command('synthesize(user_id="%s",text="%s")' % (last_intro_id, cfg['TranslateHub']['introduction'][i]), 'HUB', 'TTS'))
+        tts_commands.send(Command('synthesize(user_id="%s",text="%s",log="true")' % (last_intro_id, cfg['TranslateHub']['introduction'][i]), 'HUB', 'TTS'))
 
     return intro_id, last_intro_id
 
@@ -232,16 +233,19 @@ if __name__ == '__main__':
 
                 best_hyp = hypotheses.hyp[0]
 
+                cfg['Logging']['session_logger'].turn("system")
                 if '_other_' == best_hyp:
-                    src_tts_commands.send(Command('synthesize(text="%s")' % (cfg['TranslateHub']['i_dont_understand']), 'HUB', 'TTS'))
+                    src_tts_commands.send(Command('synthesize(text="%s",log="true")' % (cfg['TranslateHub']['i_dont_understand']), 'HUB', 'TTS'))
                 else:
-                    tts_commands.send(Command('synthesize(text="%s")' % (best_hyp), 'HUB', 'TTS'))
+                    tts_commands.send(Command('synthesize(text="%s",log="true")' % (best_hyp), 'HUB', 'TTS'))
 
-        if tts_audio_out.poll():
-            vio_play.send(tts_audio_out.recv())
+        while tts_audio_out.poll():
+            msg = tts_audio_out.recv()
+            vio_play.send(msg)
 
-        if src_tts_audio_out.poll():
-            vio_play.send(src_tts_audio_out.recv())
+        while src_tts_audio_out.poll():
+            msg = src_tts_audio_out.recv()
+            vio_play.send(msg)
 
         if call_back_time != -1 and call_back_time < time.time():
             vio_commands.send(Command('make_call(destination="%s")' % call_back_uri, 'HUB', 'VoipIO'))
@@ -321,7 +325,7 @@ if __name__ == '__main__':
                     if last24_num_calls > cfg['TranslateHub']['last24_max_num_calls'] or \
                             last24_total_time > cfg['TranslateHub']['last24_max_total_time']:
 
-                        src_tts_commands.send(Command('synthesize(text="%s")' % cfg['TranslateHub']['rejected'], 'HUB', 'TTS'))
+                        src_tts_commands.send(Command('synthesize(text="%s",log="true")' % cfg['TranslateHub']['rejected'], 'HUB', 'TTS'))
                         call_connected = True
                         reject_played = True
                         s_voice_activity = True
@@ -443,7 +447,7 @@ if __name__ == '__main__':
                 s_voice_activity = True
                 last_intro_id = str(intro_id)
                 intro_id += 1
-                src_tts_commands.send(Command('synthesize(text="%s")' % cfg['TranslateHub']['closing'], 'HUB', 'TTS'))
+                src_tts_commands.send(Command('synthesize(text="%s",log="true")' % cfg['TranslateHub']['closing'], 'HUB', 'TTS'))
                 end_played = True
             else:
                 intro_played = False
