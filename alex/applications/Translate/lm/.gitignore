@@ -7,3 +7,5 @@ final.*
 reference_*
 old*
 bootstrap
+cmu_ext_temp
+cmu_temp
