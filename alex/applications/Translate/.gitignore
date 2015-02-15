@@ -1,5 +1,6 @@
 *.sem.out.*
 call_logs
+logs
 tmp
 *.pckl
 nohup.out
