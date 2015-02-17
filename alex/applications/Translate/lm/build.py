@@ -14,7 +14,7 @@ import random
 import alex.corpustools.lm as lm
 import alex.utils.various as various
 
-from alex.corpustools.text_norm_cs import normalise_text, exclude_lm
+from alex.corpustools.text_norm_en import normalise_text, exclude_lm
 from alex.corpustools.wavaskey import save_wavaskey
 
 def is_srilm_available():
@@ -59,12 +59,12 @@ if __name__ == '__main__':
     bootstrap_dir                   = "bootstrap"
     # classes                         = "../data/database_SRILM_classes.txt"
     indomain_data_dir               = "indomain_data"
-    # gen_data                        = lm.download_general_LM_data('en')
+    gen_data                        = lm.download_general_LM_data('en')
 
     fn_pt_trn                       = "reference_transcription_trn.txt"
     fn_pt_dev                       = "reference_transcription_dev.txt"
 
-    # gen_data_norm                   = '01_gen_data_norm.txt.gz'
+    gen_data_norm                   = '01_gen_data_norm.txt.gz'
 
     indomain_data_text_trn                              = "04_indomain_data_trn.txt"
     indomain_data_text_trn_norm                         = "04_indomain_data_trn_norm.txt"
@@ -82,17 +82,17 @@ if __name__ == '__main__':
     # indomain_data_text_trn_norm_cls_count1              = "07_indomain_data_trn_norm_cls.count1"
     # indomain_data_text_trn_norm_cls_pg_arpa             = "07_indomain_data_trn_norm_cls.pg.arpa"
 
-    # indomain_data_text_trn_norm_cls_pg_arpa_scoring     = "10_indomain_data_trn_norm_cls.pg.arpa.gen_scoring.gz"
+    indomain_data_text_trn_norm_pg_arpa_scoring         = "10_indomain_data_trn_norm.pg.arpa.gen_scoring.gz"
 
-    # gen_data_norm_selected                              = '11_gen_data_norm.selected.txt'
+    gen_data_norm_selected                              = '11_gen_data_norm.selected.txt'
 
-    # extended_data_text_trn_norm                         = "20_extended_data_trn_norm.txt"
-    # extended_data_text_trn_norm_cls                     = "20_extended_data_trn_norm_cls.txt"
-    # extended_data_text_trn_norm_cls_classes             = "20_extended_data_trn_norm_cls.classes"
-    # extended_data_text_trn_norm_cls_vocab               = "20_extended_data_trn_norm_cls.vocab"
-    # extended_data_text_trn_norm_cls_count1              = "20_extended_data_trn_norm_cls.count1"
-    # extended_data_text_trn_norm_cls_pg_arpa             = "20_extended_data_trn_norm_cls.pg.arpa"
-    # extended_data_text_trn_norm_cls_pg_arpa_filtered    = "25_extended_data_trn_norm_cls.filtered.pg.arpa"
+    extended_data_text_trn_norm                         = "20_extended_data_trn_norm.txt"
+    extended_data_text_trn_norm                         = "20_extended_data_trn_norm.txt"
+    extended_data_text_trn_norm_classes                 = "20_extended_data_trn_norm.classes"
+    extended_data_text_trn_norm_vocab                   = "20_extended_data_trn_norm.vocab"
+    extended_data_text_trn_norm_count1                  = "20_extended_data_trn_norm.count1"
+    extended_data_text_trn_norm_pg_arpa                 = "20_extended_data_trn_norm.pg.arpa"
+    # extended_data_text_trn_norm_pg_arpa_filtered        = "25_extended_data_trn_norm.filtered.pg.arpa"
 
     # expanded_lm_vocab       = "26_expanded.vocab"
     # expanded_lm_pg          = "26_expanded.pg.arpa"
@@ -114,18 +114,17 @@ if __name__ == '__main__':
     # print "-"*120
 ###############################################################################################
 
-    # if not os.path.exists(gen_data_norm):
-    #     print "Normalizing general data"
-    #     print "-"*120
-    #     ###############################################################################################
+    if not os.path.exists(gen_data_norm):
+        print "Normalizing general data"
+        print "-"*120
+        ###############################################################################################
 
-    #     cmd = r"zcat %s | iconv -f UTF-8 -t UTF-8//IGNORE | sed 's/\. /\n/g' | sed 's/[[:digit:]]/ /g; s/[^[:alnum:]]/ /g; s/[ˇ]/ /g; s/ \+/ /g' | sed 's/[[:lower:]]*/\U&/g' | sed s/[\%s→€…│]//g | gzip > %s" % \
-    #           (gen_data,
-    #            "'",
-    #            gen_data_norm)
+        cmd = "zcat %s | iconv -f UTF-8 -t UTF-8//IGNORE | sed 's/\\. /\\n/g' | sed 's/[[:lower:]]*/\U&/g' | sed 's/[[:digit:]]/ /g; s/[^[:alnum:]_'\\'']/ /g; s/[ˇ]/ /g; s/ \+/ /g' | gzip > %s" % \
+              (gen_data,
+               gen_data_norm)
 
-    #     print cmd
-    #     exit_on_system_fail(cmd)
+        print cmd
+        exit_on_system_fail(cmd)
 
     if not os.path.exists(indomain_data_text_trn_norm):
         print "Generating train and dev data"
@@ -249,34 +248,33 @@ if __name__ == '__main__':
         print cmd
         exit_on_system_fail(cmd)
 
-    # if not os.path.exists(indomain_data_text_trn_norm_cls_pg_arpa_scoring):
-    #     print
-    #     print "Scoring general text data using the in-domain language model"
-    #     print "-"*120
-    #     ###############################################################################################
-    #     exit_on_system_fail("ngram -lm %s -classes %s -order 5 -debug 1 -ppl %s | gzip > %s" % \
-    #               (indomain_data_text_trn_norm_cls_pg_arpa,
-    #                indomain_data_text_trn_norm_cls_classes,
-    #                gen_data_norm,
-    #                indomain_data_text_trn_norm_cls_pg_arpa_scoring))
+    if not os.path.exists(indomain_data_text_trn_norm_pg_arpa_scoring):
+        print
+        print "Scoring general text data using the in-domain language model"
+        print "-"*120
+        ###############################################################################################
+        exit_on_system_fail("ngram -lm %s -order 5 -debug 1 -ppl %s | gzip > %s" % \
+                  (indomain_data_text_trn_norm_pg_arpa,
+                   gen_data_norm,
+                   indomain_data_text_trn_norm_pg_arpa_scoring))
 
-    # if not os.path.exists(gen_data_norm_selected):
-    #     print
-    #     print "Selecting similar sentences to in-domain data from general text data"
-    #     print "-"*120
-    #     ###############################################################################################
-    #     exit_on_system_fail("zcat %s | ../../../corpustools/srilm_ppl_filter.py > %s " % (indomain_data_text_trn_norm_cls_pg_arpa_scoring, gen_data_norm_selected))
+    if not os.path.exists(gen_data_norm_selected):
+        print
+        print "Selecting similar sentences to in-domain data from general text data"
+        print "-"*120
+        ###############################################################################################
+        exit_on_system_fail("zcat %s | ../../../corpustools/srilm_ppl_filter.py > %s " % (indomain_data_text_trn_norm_pg_arpa_scoring, gen_data_norm_selected))
 
 
-    # if not os.path.exists(extended_data_text_trn_norm_cls_pg_arpa):
-    #     print
-    #     print "Training the in-domain model on the extended data"
-    #     print "-"*120
-    #     ###############################################################################################
-    #     cmd = r"cat %s %s > %s" % (indomain_data_text_trn_norm, gen_data_norm_selected, extended_data_text_trn_norm)
-    #     # cmd = r"cat %s > %s" % (indomain_data_text_trn_norm, extended_data_text_trn_norm)
-    #     print cmd
-    #     exit_on_system_fail(cmd)
+    if not os.path.exists(extended_data_text_trn_norm_pg_arpa):
+        print
+        print "Training the in-domain model on the extended data"
+        print "-"*120
+        ###############################################################################################
+        cmd = r"cat %s %s > %s" % (indomain_data_text_trn_norm, gen_data_norm_selected, extended_data_text_trn_norm)
+        # cmd = r"cat %s > %s" % (indomain_data_text_trn_norm, extended_data_text_trn_norm)
+        print cmd
+        exit_on_system_fail(cmd)
 
     #     # convert surface forms to classes
     #     cmd = r"[ -e %s ] && replace-words-with-classes addone=10 normalize=1 outfile=%s classes=%s %s > %s || exit 1" % \
@@ -290,15 +288,15 @@ if __name__ == '__main__':
     #     exit_on_system_fail(cmd, "Maybe you forgot to run "
     #                              "'../data/database.py build'?")
 
-    #     cmd = "ngram-count -text %s -vocab %s -limit-vocab -write-vocab %s -write1 %s -order 5 -wbdiscount -memuse -lm %s" % \
-    #           (extended_data_text_trn_norm_cls,
-    #            indomain_data_text_trn_norm_cls_vocab,
-    #            extended_data_text_trn_norm_cls_vocab,
-    #            extended_data_text_trn_norm_cls_count1,
-    #            extended_data_text_trn_norm_cls_pg_arpa)
+        cmd = "ngram-count -text %s -vocab %s -limit-vocab -write-vocab %s -write1 %s -order 5 -wbdiscount -memuse -lm %s" % \
+              (extended_data_text_trn_norm,
+               indomain_data_text_trn_norm_vocab,
+               extended_data_text_trn_norm_vocab,
+               extended_data_text_trn_norm_count1,
+               extended_data_text_trn_norm_pg_arpa)
 
-    #     print cmd
-    #     exit_on_system_fail(cmd)
+        print cmd
+        exit_on_system_fail(cmd)
 
     #     cmd = "cat %s | grep -v 'CL_[[:alnum:]_]\+[[:alnum:] _]\+CL_'> %s" % \
     #           (extended_data_text_trn_norm_cls_pg_arpa,
@@ -350,31 +348,31 @@ if __name__ == '__main__':
         ###############################################################################################
 
         cmd = "ngram -lm %s -order 5 -write-lm %s -prune-lowprobs -prune 0.0000001 -renorm" \
-                  % (indomain_data_text_trn_norm_pg_arpa,
+                  % (extended_data_text_trn_norm_pg_arpa,
                      final_lm_pg)
         print cmd
         exit_on_system_fail(cmd)
 
         cmd = "ngram -lm %s -order 4 -write-lm %s -prune-lowprobs -prune 0.0000001 -renorm" \
-                  % (indomain_data_text_trn_norm_pg_arpa,
+                  % (extended_data_text_trn_norm_pg_arpa,
                      final_lm_qg)
         print cmd
         exit_on_system_fail(cmd)
 
         cmd = "ngram -lm %s -order 3 -write-lm %s -prune-lowprobs -prune 0.0000001 -renorm" \
-                  % (indomain_data_text_trn_norm_pg_arpa,
+                  % (extended_data_text_trn_norm_pg_arpa,
                      final_lm_tg)
         print cmd
         exit_on_system_fail(cmd)
 
         cmd = "ngram -lm %s -order 2 -write-lm %s -prune-lowprobs -prune 0.0000001 -renorm" \
-                  % (indomain_data_text_trn_norm_pg_arpa,
+                  % (extended_data_text_trn_norm_pg_arpa,
                      final_lm_bg)
         print cmd
         exit_on_system_fail(cmd)
 
         cmd = "cat %s | grep -v '\-pau\-' | grep -v '<s>' | grep -v '</s>' | grep -v '<unk>' | grep -v 'CL_' | grep -v '{' > %s" % \
-              (indomain_data_text_trn_norm_vocab,
+              (extended_data_text_trn_norm_vocab,
                final_lm_vocab)
         print cmd
         exit_on_system_fail(cmd)
@@ -405,6 +403,32 @@ if __name__ == '__main__':
                 final_lm_dict)
         print cmd
         exit_on_system_fail(cmd)
+
+        cmd = "cat %s | grep -v 'UNKNOWN' > %s " % \
+                (final_lm_dict,
+                 final_lm_dict+'.tmp',
+                )
+        print cmd
+        exit_on_system_fail(cmd)
+
+        cmd = "mv %s %s " % \
+                (final_lm_dict+'.tmp',
+                 final_lm_dict,
+                )
+        print cmd
+        exit_on_system_fail(cmd)
+
+        cmd = """
+        echo "_INHALE_	_inhale_" >> {dict} &&
+        echo "_LAUGH_	_laugh_" >> {dict} &&
+        echo "_EHM_HMM_	_ehm_hmm_" >> {dict} &&
+        echo "_NOISE_	_noise_" >> {dict} &&
+        echo "DONE"
+        """.format(dict=final_lm_dict)
+        print cmd
+        exit_on_system_fail(cmd)
+
+        os.system('rm cmu_temp cmu_ext_temp')
 
         cmd = "perl ../../../tools/htk/bin/AddSp.pl %s 1 > %s " % \
               (final_lm_dict,
