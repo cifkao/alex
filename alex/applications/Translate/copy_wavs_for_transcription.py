@@ -22,14 +22,14 @@ if __name__ == '__main__':
 
         size = os.stat(f).st_size
 
-        if size > 1000000:
+        #if size > 1000000:
             # process only files with 2 minutes of audio or longer
-            new_f_name = os.path.join(new_dir, os.path.basename(f))
+        new_f_name = os.path.join(new_dir, os.path.basename(f))
 
-            print 'Copying: ', f, ' to ', new_f_name
+        print 'Copying: ', f, ' to ', new_f_name
 
-            # channel A
-            shutil.copy2(f, new_f_name)
+        # channel A
+        shutil.copy2(f, new_f_name)
 
-        else:
-            print '# Ignoring: ', f
+        #else:
+        #    print '# Ignoring: ', f
