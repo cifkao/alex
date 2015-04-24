@@ -22,21 +22,30 @@ _nonspeech_map = {
         '(SIL)',
         '(QUIET)',
         '(CLEARING)',
+        '<SILENCE>',
+        '<PAUSE>',
     ),
     '_INHALE_': (
         '(INHALE)',
         '(BREATH)',
         '(BREATHING)',
         '(SNIFFING)',
+        '[SIGH]',
+        '<BREATH>',
+        '<INHALE>',
     ),
     '_LAUGH_': (
         '(LAUGH)',
         '(LAUGHING)',
+        '[LAUGHTER]',
+        '<LAUGH>',
     ),
     '_EHM_HMM_': (
         '(EHM_HMM)',
         '(HESITATION)',
         '(HUM)',
+        '<UH>',
+        '<UM>',
     ),
     '_NOISE_': (
         '(COUCHING)',
@@ -60,10 +69,15 @@ _nonspeech_map = {
         '(STATIC)',
         '(SQUEAK)',
         '(TVNOISE)',
+        '[NOISE]',
+        '[LIPSMACK]',
+        '<NOISE>',
+        '<MOUTH>',
     ),
     '_EXCLUDE_': (
         '(EXCLUDE)',
         '(UNINTELLIGIBLE)',
+        '<UNINTELLIGIBLE>',
         '(UNINT)',
         '(PERSONAL)',
         '(VULGARISM)',
@@ -643,6 +657,8 @@ _subst = [
           ('WHERES', '_EXCLUDE_'),
           ('HK', '_EXCLUDE_'),
           ('CAF', '_EXCLUDE_'),
+          ('<SPK1>', ''),
+          ('<SPK2>', ''),
            ]
 #}}}
 for idx, tup in enumerate(_subst):
@@ -662,13 +678,13 @@ _hesitation = ['AAAA', 'AAA', 'AA', 'AAH', 'A-', "-AH-", "AH-", "AH.", "AH",
                "ERRM", "HUMN", "UM", "UMN", "URM", "AH", "ER", "ERM", "HUH",
                "HUMPH", "HUMN", "HUM", "HU", "SH", "UH", "UHUM", "UM", "UMH",
                "URUH", "MMMM", "MMM", "OHM", "UMMM", "MHMM", "EMPH", "HMPH",
-               "UGH", "UHH", "UMMMMM", "SHH", "OOH", ]
+               "UGH", "UHH", "UMMMMM", "SHH", "OOH", "MHM", ]
 # }}}
 for idx, word in enumerate(_hesitation):
     _hesitation[idx] = re.compile(r'(^|\s){word}($|\s)'.format(word=word))
 
 _more_spaces = re.compile(r'\s{2,}')
-_sure_punct_rx = re.compile(r'[.?!",_]')
+_sure_punct_rx = re.compile(r'[.?!",_\t]')
 _parenthesized_rx = re.compile(r'\(+([^)]*)\)+')
 
 
@@ -676,6 +692,8 @@ def normalise_text(text):
     """
     Normalises the transcription.  This is the main function of this module.
     """
+
+    text = text.replace('_NOISE_', '(NOISE)').replace('_LAUGH_', '(LAUGH)').replace('_INHALE_', '(INHALE)').replace('_EHM_HMM_', '(EHM_HMM)')
     text = _sure_punct_rx.sub(' ', text)
     text = text.strip().upper()
 
@@ -702,12 +720,12 @@ def normalise_text(text):
         text = pat.sub(sub, text)
     text = _more_spaces.sub(' ', text).strip()
 
-    for char in '^':
+    for char in ['^', '@', '#', '`']:
         text = text.replace(char, '')
 
     return text
 
-_excluded_characters = set(['=', '-', '*', '+', '~', '(', ')', '[', ']', '{', '}', '<', '>',
+_excluded_characters = set(['\n', '=', '-', '*', '+', '~', '(', ')', '[', ']', '{', '}', '<', '>', '#', '`', 
                         '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
 
 def exclude_asr(text):
@@ -724,16 +742,17 @@ def exclude_asr(text):
     if text in ['_SIL_', ]:
         return True
 
-    if text in ['_NOISE_', '_EHM_HMM_', '_INHALE_', '_LAUGH_']:
+    if text in ['_NOISE_', '_EHM_HMM_', '_INHALE_', '_LAUGH_',]:
         return False
 
     # allow for sentences with these non-speech events if mixed with text
-    for s in ['_NOISE_', '_INHALE_', '_LAUGH_']:
+    for s in ['_NOISE_', '_INHALE_', '_LAUGH_',]:
         text = text.replace(s,'')
 
     for char in _excluded_characters:
         if char in text:
             return True
+
     if '_' in text:
         return True
 
