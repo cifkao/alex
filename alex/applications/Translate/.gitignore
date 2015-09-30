@@ -1,5 +1,6 @@
 *.sem.out.*
 call_logs
+SLT-WAVs-*
 logs
 tmp
 *.pckl

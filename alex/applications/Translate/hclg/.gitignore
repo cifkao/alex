@@ -4,4 +4,6 @@ data
 models*
 hclg_tmp_data
 decoded_kaldi
+decoded_kaldi_last
 decoded_google
+google.cfg

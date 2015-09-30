@@ -55,10 +55,10 @@ if __name__ == '__main__':
     # Test if SRILM is available.
     require_srilm()
 
-    train_data_size                 = 0.90
+    train_data_size                 = 0 #0.90
     bootstrap_dir                   = "bootstrap"
     # classes                         = "../data/database_SRILM_classes.txt"
-    indomain_data_dir               = "indomain_data"
+    indomain_data_dir               = "../call_logs"
     gen_data                        = lm.download_general_LM_data('en')
 
     fn_pt_trn                       = "reference_transcription_trn.txt"
@@ -157,7 +157,7 @@ if __name__ == '__main__':
                     t = various.get_text_from_xml_node(trans)
                     t = normalise_text(t)
 
-                    if exclude_lm(t):
+                    if len(t) == 0 or exclude_lm(t):
                         continue
 
                     # The silence does not have a label in the language model.
@@ -189,6 +189,7 @@ if __name__ == '__main__':
             w.write('\n'.join(t_dev))
 
         save_wavaskey(fn_pt_trn, dict(pt_train))
+        #save_wavaskey(fn_pt_dev, dict(pt_train))
         save_wavaskey(fn_pt_dev, dict(pt_dev))
 
         normalize_cmd = "iconv -f UTF-8 -t UTF-8//IGNORE | sed 's/\\. /\\n/g' | sed 's/[[:lower:]]*/\U&/g' | sed 's/[[:digit:]]/ /g; s/[^[:alnum:]_'\\'']/ /g; s/[ˇ]/ /g; s/ \+/ /g'"
@@ -288,9 +289,10 @@ if __name__ == '__main__':
     #     exit_on_system_fail(cmd, "Maybe you forgot to run "
     #                              "'../data/database.py build'?")
 
-        cmd = "ngram-count -text %s -vocab %s -limit-vocab -write-vocab %s -write1 %s -order 5 -wbdiscount -memuse -lm %s" % \
+        #cmd = "ngram-count -text %s -vocab %s -limit-vocab -write-vocab %s -write1 %s -order 5 -wbdiscount -memuse -lm %s" % \
+        cmd = "ngram-count -text %s -write-vocab %s -write1 %s -order 5 -wbdiscount -memuse -lm %s" % \
               (extended_data_text_trn_norm,
-               indomain_data_text_trn_norm_vocab,
+               #indomain_data_text_trn_norm_vocab,
                extended_data_text_trn_norm_vocab,
                extended_data_text_trn_norm_count1,
                extended_data_text_trn_norm_pg_arpa)
@@ -489,11 +491,11 @@ if __name__ == '__main__':
     # exit_on_system_fail("ngram -lm %s -order 5 -ppl %s -zeroprob-word _NOISE_" % (expanded_lm_pg, indomain_data_text_dev_norm))
     # print
 
-    # print "-"*120
-    # print "Full trn 5-gram LM on dev data."
-    # print "-"*120
-    # exit_on_system_fail("ngram -lm %s -order 5 -ppl %s" % (indomain_data_text_trn_norm_pg_arpa, indomain_data_text_dev_norm))
-    # print
+    print "-"*120
+    print "Full trn 5-gram LM on dev data."
+    print "-"*120
+    exit_on_system_fail("ngram -lm %s -order 5 -ppl %s" % (indomain_data_text_trn_norm_pg_arpa, indomain_data_text_dev_norm))
+    print
 
 
     # # print "-"*120
@@ -502,29 +504,29 @@ if __name__ == '__main__':
     # # exit_on_system_fail("ngram -lm %s -order 5 -ppl %s" % (mixed_lm_pg, indomain_data_text_dev_norm))
     # # print
 
-    # print "-"*120
-    # print "Final 5-gram LM on dev data."
-    # print "-"*120
-    # exit_on_system_fail("ngram -lm %s -order 5 -ppl %s" % (final_lm_pg, indomain_data_text_dev_norm))
-    # print
+    print "-"*120
+    print "Final 5-gram LM on dev data."
+    print "-"*120
+    exit_on_system_fail("ngram -lm %s -order 5 -ppl %s" % (final_lm_pg, indomain_data_text_dev_norm))
+    print
 
 
-    # print "-"*120
-    # print "Final 4-gram LM on dev data."
-    # print "-"*120
-    # exit_on_system_fail("ngram -lm %s -order 4 -ppl %s" % (final_lm_qg, indomain_data_text_dev_norm))
-    # print
+    print "-"*120
+    print "Final 4-gram LM on dev data."
+    print "-"*120
+    exit_on_system_fail("ngram -lm %s -order 4 -ppl %s" % (final_lm_qg, indomain_data_text_dev_norm))
+    print
 
 
-    # print "-"*120
-    # print "Final 3-gram LM on dev data."
-    # print "-"*120
-    # exit_on_system_fail("ngram -lm %s -ppl %s" % (final_lm_tg, indomain_data_text_dev_norm))
-    # print
+    print "-"*120
+    print "Final 3-gram LM on dev data."
+    print "-"*120
+    exit_on_system_fail("ngram -lm %s -ppl %s" % (final_lm_tg, indomain_data_text_dev_norm))
+    print
 
 
-    # print "-"*120
-    # print "Final 2-gram LM on dev data."
-    # print "-"*120
-    # exit_on_system_fail("ngram -lm %s -ppl %s" % (final_lm_bg, indomain_data_text_dev_norm))
-    # print
+    print "-"*120
+    print "Final 2-gram LM on dev data."
+    print "-"*120
+    exit_on_system_fail("ngram -lm %s -ppl %s" % (final_lm_bg, indomain_data_text_dev_norm))
+    print
