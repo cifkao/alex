@@ -156,6 +156,7 @@ if __name__ == '__main__':
                                sec_asr_audio_in, sec_asr_child_audio_in,
                                sec_asr_hypotheses_out, sec_asr_child_hypotheses,
                                mt_hypotheses_out, mt_child_hypotheses,
+                               mt_hypotheses_in, mt_child_hypotheses_in,
                                tts_text_in, tts_child_text_in,
                                tts_audio_out, tts_child_audio_out,
                                src_tts_text_in, src_tts_child_text_in,
