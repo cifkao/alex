@@ -102,13 +102,16 @@ if __name__ == '__main__':
     parser.add_argument('-c', action="store", dest="configs", nargs='+',
                         help='additional configuration files')
     parser.add_argument('-t', action="store", dest="source_tts_configs", nargs='+',
-                        help='configuration file for source TTS')
+                        help='configuration file(s) for source TTS')
+    parser.add_argument('-a', action="store", dest="secondary_asr_configs", nargs='+', default=None,
+                        help='configuration file(s) for an additional ASR engine')
     parser.add_argument('-n', action="store", dest="max_n_calls", type=int, default=0,
                         help='maximum number of calls')
     args = parser.parse_args()
 
     cfg = Config.load_configs(args.configs)
     src_tts_cfg = Config.load_configs(args.configs + args.source_tts_configs)
+    sec_asr_cfg = Config.load_configs(args.configs + args.secondary_asr_configs) if args.secondary_asr_configs else None
 
     max_n_calls = args.max_n_calls
 
@@ -124,9 +127,15 @@ if __name__ == '__main__':
     vad_audio_out, vad_child_audio_out = multiprocessing.Pipe() # used to read output audio from VAD
 
     asr_commands, asr_child_commands = multiprocessing.Pipe()          # used to send commands to ASR
+    asr_audio_in, asr_child_audio_in = multiprocessing.Pipe()          # used to send audio to ASR
     asr_hypotheses_out, asr_child_hypotheses = multiprocessing.Pipe()  # used to read ASR hypotheses
 
+    sec_asr_commands, sec_asr_child_commands = multiprocessing.Pipe()          # used to send commands to secondary ASR
+    sec_asr_audio_in, sec_asr_child_audio_in = multiprocessing.Pipe()          # used to send audio to secondary ASR
+    sec_asr_hypotheses_out, sec_asr_child_hypotheses = multiprocessing.Pipe()  # used to read ASR hypotheses
+
     mt_commands, mt_child_commands = multiprocessing.Pipe()            # used to send commands to MT
+    mt_hypotheses_in, mt_child_hypotheses_in = multiprocessing.Pipe()  # used to send ASR hypotheses to MT
     mt_hypotheses_out, mt_child_hypotheses = multiprocessing.Pipe()    # used to read MT hypotheses
 
     tts_commands, tts_child_commands = multiprocessing.Pipe()   # used to send commands to TTS
@@ -137,12 +146,15 @@ if __name__ == '__main__':
     src_tts_text_in, src_tts_child_text_in = multiprocessing.Pipe()     # used to send TTS text
     src_tts_audio_out, src_tts_child_audio_out = multiprocessing.Pipe() # used to receive synthesized audio
 
-    command_connections = [vio_commands, vad_commands, asr_commands, mt_commands, tts_commands, src_tts_commands]
+    command_connections = [vio_commands, vad_commands, asr_commands, sec_asr_commands, mt_commands, tts_commands, src_tts_commands]
 
     non_command_connections = [vio_record, vio_child_record,
                                vio_play, vio_child_play,
                                vad_audio_out, vad_child_audio_out,
+                               asr_audio_in, asr_child_audio_in,
                                asr_hypotheses_out, asr_child_hypotheses,
+                               sec_asr_audio_in, sec_asr_child_audio_in,
+                               sec_asr_hypotheses_out, sec_asr_child_hypotheses,
                                mt_hypotheses_out, mt_child_hypotheses,
                                tts_text_in, tts_child_text_in,
                                tts_audio_out, tts_child_audio_out,
@@ -154,14 +166,17 @@ if __name__ == '__main__':
 
     vio = VoipIO(cfg, vio_child_commands, vio_child_record, vio_child_play, close_event)
     vad = VAD(cfg, vad_child_commands, vio_record, vad_child_audio_out, close_event)
-    asr = ASR(cfg, asr_child_commands, vad_audio_out, asr_child_hypotheses, close_event)
-    mt = MT(cfg, mt_child_commands, asr_hypotheses_out, mt_child_hypotheses, close_event)
+    asr = ASR(cfg, asr_child_commands, asr_child_audio_in, asr_child_hypotheses, close_event)
+    sec_asr = ASR(sec_asr_cfg, sec_asr_child_commands, sec_asr_child_audio_in, sec_asr_child_hypotheses, close_event) if sec_asr_cfg else None
+    mt = MT(cfg, mt_child_commands, mt_child_hypotheses_in, mt_child_hypotheses, close_event)
     tts = TTS(cfg, tts_child_commands, tts_child_text_in, tts_child_audio_out, close_event)
     src_tts = TTS(src_tts_cfg, src_tts_child_commands, src_tts_child_text_in, src_tts_child_audio_out, close_event)
 
     vio.start()
     vad.start()
     asr.start()
+    if sec_asr:
+        sec_asr.start()
     mt.start()
     tts.start()
     src_tts.start()
@@ -184,6 +199,7 @@ if __name__ == '__main__':
     u_voice_activity = False
     u_last_voice_activity_time = 0
     n_calls = 0
+    asr_hyp_by_fname = {}  # stores the most recent ASR hypothesis for each file name
 
     db = load_database(cfg['TranslateHub']['call_db'])
 
@@ -221,6 +237,45 @@ if __name__ == '__main__':
 
     while 1:
         time.sleep(cfg['Hub']['main_loop_sleep_time'])
+
+        if vad_audio_out.poll():
+            vad_msg = vad_audio_out.recv()
+            asr_audio_in.send(vad_msg)
+            if sec_asr:
+                sec_asr_audio_in.send(vad_msg)
+        
+        # Get output from both ASRs. The first ASR that returns some hypotheses saves them to asr_hyp_by_fname.
+        # When the primary ASR returns, the hypotheses are sent to MT immediately unless the best hypothesis is _other_.
+        # In that case, the secondary ASR hypotheses are used if available.
+        # If the secondary ASR returns before the primary, nothing happens until the primary ASR returns. If the secondary ASR
+        # returns after the primary and the best primary ASR hypothesis is _other_, the secondary ASR hypotheses are sent to MT.
+
+        if asr_hypotheses_out.poll():
+            hypotheses = asr_hypotheses_out.recv()
+            fname = hypotheses.fname
+            best_hyp = unicode(hypotheses.hyp.get_best()).lower()
+            if best_hyp == '_other_' and sec_asr and fname in asr_hyp_by_fname:
+                # The primary ASR didn't return any hypotheses and the hypotheses from the secondary
+                # ASR have already arrived. Use them.
+                mt_hypotheses_in.send(asr_hyp_by_fname[fname])
+            elif best_hyp != '_other_':
+                mt_hypotheses_in.send(hypotheses)
+
+            if sec_asr and fname not in asr_hyp_by_fname:
+                asr_hyp_by_fname[fname] = hypotheses
+            elif fname in asr_hyp_by_fname:
+                del asr_hyp_by_fname[fname]
+
+        if sec_asr and sec_asr_hypotheses_out.poll():
+            hypotheses = sec_asr_hypotheses_out.recv()
+            fname = hypotheses.fname
+            if fname in asr_hyp_by_fname:
+                primary_best_hyp = unicode(asr_hyp_by_fname[fname].hyp.get_best()).lower()
+                if primary_best_hyp == '_other_':
+                    mt_hypotheses_in.send(hypotheses)
+                del asr_hyp_by_fname[fname]
+            else:
+                asr_hyp_by_fname[fname] = hypotheses
 
         if mt_hypotheses_out.poll():
             hypotheses = mt_hypotheses_out.recv()
@@ -343,6 +398,7 @@ if __name__ == '__main__':
                         s_last_voice_activity_time = 0
                         u_voice_activity = False
                         u_last_voice_activity_time = 0
+                        asr_hyp_by_fname = {}
 
                         intro_id, last_intro_id = play_intro(cfg, src_tts_commands, intro_id, last_intro_id)
 
