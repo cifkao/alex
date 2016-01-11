@@ -110,8 +110,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     cfg = Config.load_configs(args.configs)
-    src_tts_cfg = Config.load_configs(args.configs + args.source_tts_configs)
-    sec_asr_cfg = Config.load_configs(args.configs + args.secondary_asr_configs) if args.secondary_asr_configs else None
+
+    src_tts_cfg = Config(config={})
+    src_tts_cfg.merge(cfg)
+    src_tts_cfg.merge(Config.load_configs(args.source_tts_configs, use_default=False, log=False))
+    
+    sec_asr_cfg = Config(config={}) if args.secondary_asr_configs else None
+    if sec_asr_cfg is not None:
+        sec_asr_cfg.merge(cfg)
+        sec_asr_cfg.merge(Config.load_configs(args.secondary_asr_configs, use_default=False, log=False))
 
     max_n_calls = args.max_n_calls
 
@@ -168,7 +175,7 @@ if __name__ == '__main__':
     vio = VoipIO(cfg, vio_child_commands, vio_child_record, vio_child_play, close_event)
     vad = VAD(cfg, vad_child_commands, vio_record, vad_child_audio_out, close_event)
     asr = ASR(cfg, asr_child_commands, asr_child_audio_in, asr_child_hypotheses, close_event)
-    sec_asr = ASR(sec_asr_cfg, sec_asr_child_commands, sec_asr_child_audio_in, sec_asr_child_hypotheses, close_event) if sec_asr_cfg else None
+    sec_asr = ASR(sec_asr_cfg, sec_asr_child_commands, sec_asr_child_audio_in, sec_asr_child_hypotheses, close_event) if sec_asr_cfg is not None else None
     mt = MT(cfg, mt_child_commands, mt_child_hypotheses_in, mt_child_hypotheses, close_event)
     tts = TTS(cfg, tts_child_commands, tts_child_text_in, tts_child_audio_out, close_event)
     src_tts = TTS(src_tts_cfg, src_tts_child_commands, src_tts_child_text_in, src_tts_child_audio_out, close_event)
@@ -203,6 +210,9 @@ if __name__ == '__main__':
     asr_hyp_by_fname = {}  # stores the most recent ASR hypothesis for each file name
 
     db = load_database(cfg['TranslateHub']['call_db'])
+
+    def i_dont_understand():
+        src_tts_commands.send(Command('synthesize(text="%s",log="true")' % (cfg['TranslateHub']['i_dont_understand']), 'HUB', 'TTS'))
 
     for remote_uri in db['calls_from_start_end_length']:
         num_all_calls, total_time, last24_num_calls, last24_total_time = get_stats(db, remote_uri)
@@ -255,11 +265,14 @@ if __name__ == '__main__':
             hypotheses = asr_hypotheses_out.recv()
             fname = hypotheses.fname
             best_hyp = unicode(hypotheses.hyp.get_best()).lower()
-            if best_hyp == '_other_' and sec_asr and fname in asr_hyp_by_fname:
-                # The primary ASR didn't return any hypotheses and the hypotheses from the secondary
-                # ASR have already arrived. Use them.
-                mt_hypotheses_in.send(asr_hyp_by_fname[fname])
-            elif best_hyp != '_other_':
+            if best_hyp == '_other_':
+                if sec_asr:
+                    if fname in asr_hyp_by_fname:
+                        # The hypotheses from the secondary ASR have already arrived. Use them.
+                        mt_hypotheses_in.send(asr_hyp_by_fname[fname])
+                else:
+                    i_dont_understand()
+            else:
                 mt_hypotheses_in.send(hypotheses)
 
             if sec_asr and fname not in asr_hyp_by_fname:
@@ -269,11 +282,15 @@ if __name__ == '__main__':
 
         if sec_asr and sec_asr_hypotheses_out.poll():
             hypotheses = sec_asr_hypotheses_out.recv()
+            best_hyp = unicode(hypotheses.hyp.get_best()).lower()
             fname = hypotheses.fname
             if fname in asr_hyp_by_fname:
                 primary_best_hyp = unicode(asr_hyp_by_fname[fname].hyp.get_best()).lower()
                 if primary_best_hyp == '_other_':
-                    mt_hypotheses_in.send(hypotheses)
+                    if best_hyp == '_other_':
+                        i_dont_understand()
+                    else:
+                        mt_hypotheses_in.send(hypotheses)
                 del asr_hyp_by_fname[fname]
             else:
                 asr_hyp_by_fname[fname] = hypotheses
@@ -290,8 +307,10 @@ if __name__ == '__main__':
                 best_hyp = hypotheses.hyp[0]
 
                 cfg['Logging']['session_logger'].turn("system")
-                if '_other_' == best_hyp:
-                    src_tts_commands.send(Command('synthesize(text="%s",log="true")' % (cfg['TranslateHub']['i_dont_understand']), 'HUB', 'TTS'))
+                if '_other_' == best_hyp or '' == best_hyp.strip():
+                    i_dont_understand()
+                elif '__error__' == best_hyp:
+                    src_tts_commands.send(Command('synthesize(text="%s",log="true")' % (cfg['TranslateHub']['error']), 'HUB', 'TTS'))
                 else:
                     tts_text_in.send(TTSText(best_hyp, 'HUB', 'TTS'))
 

@@ -31,7 +31,7 @@ class MTMonkeyMT(MTInterface):
         json_hypotheses = urllib2.urlopen(request).read()
 
         if self.cfg['MT']['MTMonkey']['debug']:
-            print json_hypotheses
+            self.syslog.debug(json_hypotheses)
 
         return json_hypotheses
 
@@ -51,25 +51,28 @@ class MTMonkeyMT(MTInterface):
             try:
                 json_hypotheses = self.get_translation_hypotheses(best_asr_hyp)
             except (urllib2.HTTPError, urllib2.URLError) as e:
-                self.syslog.exception('MTMonkeyMT connection error: %s' % unicode(e))
-                raise MTException('MTMonkey connection error: %s' % str(e))
+                self.syslog.exception('MTMonkey connection error: %s' % unicode(e))
+                return ['__error__']
 
             try:
                 monkey_hyp = json.loads(json_hypotheses)
+
                 if 'errorCode' in monkey_hyp and monkey_hyp['errorCode'] == 0:
                     nblist = ['']
                     sep = ''
                     for sentence in monkey_hyp['translation']:
                         nblist[0] += sep + sentence['translated'][0]['text']
                         sep = ' '
-                        
                 else:
                     if 'errorCode' in monkey_hyp and 'errorMessage' in monkey_hyp:
-                        raise MTException('MTMonkey error #%d: %s' % (monkey_hyp['errorCode'], monkey_hyp['errorMessage']))
+                        self.syslog.exception('MTMonkey error #%d: %s' % (monkey_hyp['errorCode'], monkey_hyp['errorMessage']))
+                        return ['__error__']
                     else:
-                        raise MTException('MTMonkey error')
+                        self.syslog.exception('MTMonkey error: unexpected response %s' % (json_hypotheses))
+                        return ['__error__']
             except:
-                raise MTException('MTMonkey error')
+                self.syslog.exception('MTMonkey error: error parsing response %s' % (json_hypotheses))
+                return ['__error__']
         else:
             nblist = ['_other_']
 
