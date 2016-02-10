@@ -4,9 +4,12 @@
 from __future__ import unicode_literals
 
 import multiprocessing
+import select
 import time
 import random
-import urllib
+import urllib2
+import json
+from collections import deque
 
 from alex.components.slu.da import DialogueAct, DialogueActItem, DialogueActConfusionNetwork
 from alex.components.hub.messages import Command, SLUHyp, DMDA
@@ -41,7 +44,8 @@ class DM(multiprocessing.Process):
         self.dm = dm_factory(dm_type, cfg)
         self.dm.new_dialogue()
 
-        self.codes = ["%04d" % i for i in range(0, 10000)]
+        self.codes = deque(["%04d" % i for i in range(0, 10000)])
+
         # random.seed(self.cfg['DM']['epilogue']['code_seed'])
         random.shuffle(self.codes)
         self.test_code_server_connection()
@@ -59,6 +63,7 @@ class DM(multiprocessing.Process):
 
         while self.commands.poll():
             command = self.commands.recv()
+
             if self.cfg['DM']['debug']:
                 self.cfg['Logging']['system_logger'].debug(command)
 
@@ -77,9 +82,11 @@ class DM(multiprocessing.Process):
                     
                     return False
 
+                if command.parsed['__name__'] == 'prepare_new_dialogue':
+                    self.dm.new_dialogue()
+
                 if command.parsed['__name__'] == 'new_dialogue':
                     self.epilogue_state = None
-                    self.dm.new_dialogue()
 
                     self.cfg['Logging']['session_logger'].turn("system")
                     self.dm.log_state()
@@ -161,17 +168,31 @@ class DM(multiprocessing.Process):
         self.commands.send(DMDA(da, 'DM', 'HUB'))
 
     def epilogue_final_code(self):
-        code = self.codes.pop()
 
-        # pull the url
-        url = self.cfg['DM']['epilogue']['final_code_url'].format(code = code)
-        urllib.urlopen(url)
+        data = None
+        attempts = 0
+        url_template = self.cfg['DM']['epilogue']['final_code_url']
+        system_logger = self.cfg['Logging']['system_logger']
 
-        text = [c for c in code]
-        text = ", ".join(text)
-        text = self.cfg['DM']['epilogue']['final_code_text'].format(code = text)
-        text = [text,]*3
-        text = self.cfg['DM']['epilogue']['final_code_text_repeat'].join(text)
+        # store a code on the server (try several times if not successful)
+        while attempts < 10 and not data or not data['response'] or data['response'] != 'success':
+            code = self.codes.popleft()
+            self.codes.append(code)  # put the code back to the end of the queue for reuse
+            attempts += 1
+            # pull the URL
+            url = url_template.format(code=code, logdir=system_logger.get_session_dir_name())
+            data = urllib2.urlopen(url).read()
+            data = json.loads(data, encoding='UTF-8')
+
+        if attempts >= 10:
+            # This shouldn't happen
+            text = 'I am sorry. A valid code could not be generated'
+        else:
+            text = [c for c in code]
+            text = ", ".join(text)
+            text = self.cfg['DM']['epilogue']['final_code_text'].format(code=text)
+            text = [text, ] * 3
+            text = self.cfg['DM']['epilogue']['final_code_text_repeat'].join(text)
 
         da = DialogueAct('say(text="{text}")'.format(text=text))
         self.cfg['Logging']['session_logger'].dialogue_act("system", da)
@@ -179,12 +200,13 @@ class DM(multiprocessing.Process):
 
         self.final_code_given = True
 
-
     def epilogue(self):
         """ Gives the user last information before hanging up.
 
         :return the name of the activity or None
         """
+
+        self.cfg['Logging']['system_logger'].info("FQ IS " + str(self.cfg['DM']['epilogue'].get('final_question')))
         if self.cfg['DM']['epilogue']['final_question']:
             self.epilogue_final_question()
             return 'final_question'
@@ -262,7 +284,7 @@ class DM(multiprocessing.Process):
                     print 'Received close event in: %s' % multiprocessing.current_process().name
                     return
 
-                time.sleep(self.cfg['Hub']['main_loop_sleep_time'])
+                select.select([self.commands, self.slu_hypotheses_in], [], [], 1)
 
                 s = (time.time(), time.clock())
 
@@ -273,6 +295,7 @@ class DM(multiprocessing.Process):
                 # process the incoming SLU hypothesis
                 self.read_slu_hypotheses_write_dialogue_act()
 
+                # Print out the execution time if it took longer than the threshold.
                 d = (time.time() - s[0], time.clock() - s[1])
                 if d[0] > 0.200:
                     print "EXEC Time inner loop: DM t = {t:0.4f} c = {c:0.4f}\n".format(t=d[0], c=d[1])
@@ -291,9 +314,9 @@ class DM(multiprocessing.Process):
 
     def test_code_server_connection(self):
         """ this opens a test connection to our code server, content of the response is not important
-            if our server is down this call will fail and the vm will crash. this is more sensible to CF people,
+            if our server is down this call will fail and the VM will crash. this is more sensible to CF people,
             otherwise CF contributor would do the job without getting paid.
         """
         if self.cfg['DM']['epilogue']['final_question'] is None and self.cfg['DM']['epilogue']['final_code_url'] is not None:
-            url = self.cfg['DM']['epilogue']['final_code_url'].format(code='test')
-            urllib.urlopen(url)
+            url = self.cfg['DM']['epilogue']['final_code_url'].format(code='test', logdir='')
+            urllib2.urlopen(url)
